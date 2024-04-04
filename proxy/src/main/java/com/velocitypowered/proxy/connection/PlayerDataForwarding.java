@@ -20,16 +20,22 @@ package com.velocitypowered.proxy.connection;
 import static com.velocitypowered.proxy.VelocityServer.GENERAL_GSON;
 
 import com.google.common.collect.ImmutableList;
+import com.velocitypowered.api.event.player.ForwardingGameProfileCreateEvent;
+import com.velocitypowered.api.event.player.HandshakeDataCreateEvent;
 import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.api.proxy.crypto.IdentifiedKey;
 import com.velocitypowered.api.util.GameProfile;
+import com.velocitypowered.proxy.VelocityServer;
+import com.velocitypowered.proxy.connection.client.ConnectedPlayer;
 import com.velocitypowered.proxy.protocol.ProtocolUtils;
+import com.velocitypowered.proxy.server.VelocityRegisteredServer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.function.UnaryOperator;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -141,12 +147,18 @@ public final class PlayerDataForwarding {
   public static String createLegacyForwardingAddress(
       final String serverAddress,
       final String playerAddress,
-      final GameProfile profile
+      final ConnectedPlayer player,
+      VelocityRegisteredServer previousServer,
+      VelocityRegisteredServer toServer,
+      VelocityServer server
   ) {
     return createLegacyForwardingAddress(
         serverAddress,
         playerAddress,
-        profile,
+        player,
+        previousServer,
+        toServer,
+        server,
         UnaryOperator.identity()
     );
   }
@@ -154,7 +166,10 @@ public final class PlayerDataForwarding {
   private static String createLegacyForwardingAddress(
       final String serverAddress,
       final String playerAddress,
-      final GameProfile profile,
+      final ConnectedPlayer player,
+      VelocityRegisteredServer previousServer,
+      VelocityRegisteredServer toServer,
+      VelocityServer server,
       final UnaryOperator<List<GameProfile.Property>> propertiesTransform
   ) {
     // BungeeCord IP forwarding is simply a special injection after the "address" in the handshake,
@@ -165,17 +180,36 @@ public final class PlayerDataForwarding {
         .append(LEGACY_SEPARATOR)
         .append(playerAddress)
         .append(LEGACY_SEPARATOR)
-        .append(profile.getUndashedId())
+        .append(player.getGameProfile().getUndashedId())
         .append(LEGACY_SEPARATOR);
-    GENERAL_GSON
-        .toJson(propertiesTransform.apply(profile.getProperties()), data);
-    return data.toString();
+    try {
+      ForwardingGameProfileCreateEvent event = new ForwardingGameProfileCreateEvent(
+          player,
+          previousServer,
+          toServer,
+          propertiesTransform.apply(player.getGameProfile().getProperties())
+      );
+      GENERAL_GSON
+          .toJson(server.getEventManager().fire(event).get().getGameProfile(), data);
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
+    }
+    try {
+      HandshakeDataCreateEvent event =
+          server.getEventManager().fire(new HandshakeDataCreateEvent(player, previousServer, toServer, data.toString())).get();
+      return event.getData();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public static String createBungeeGuardForwardingAddress(
       final String serverAddress,
       final String playerAddress,
-      final GameProfile profile,
+      final ConnectedPlayer player,
+      VelocityRegisteredServer previousServer,
+      VelocityRegisteredServer toServer,
+      VelocityServer server,
       final byte[] forwardingSecret
   ) {
     // Append forwarding secret as a BungeeGuard token.
@@ -187,7 +221,10 @@ public final class PlayerDataForwarding {
     return createLegacyForwardingAddress(
         serverAddress,
         playerAddress,
-        profile,
+        player,
+        previousServer,
+        toServer,
+        server,
         properties -> ImmutableList.<GameProfile.Property>builder()
             .addAll(properties)
             .add(property)

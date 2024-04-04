@@ -139,20 +139,26 @@ public class VelocityServerConnection implements MinecraftConnectionAssociation,
 
   private String createLegacyForwardingAddress() {
     return PlayerDataForwarding.createLegacyForwardingAddress(
-      proxyPlayer.getVirtualHost().orElseGet(() ->
-        registeredServer.getServerInfo().getAddress()).getHostString(),
-      getPlayerRemoteAddressAsString(),
-      proxyPlayer.getGameProfile()
+        proxyPlayer.getVirtualHost().orElseGet(() ->
+            registeredServer.getServerInfo().getAddress()).getHostString(),
+        getPlayerRemoteAddressAsString(),
+        proxyPlayer,
+        previousServer,
+        registeredServer,
+        server
     );
   }
 
   private String createBungeeGuardForwardingAddress(byte[] forwardingSecret) {
     return PlayerDataForwarding.createBungeeGuardForwardingAddress(
-      proxyPlayer.getVirtualHost().orElseGet(() ->
-        registeredServer.getServerInfo().getAddress()).getHostString(),
-      getPlayerRemoteAddressAsString(),
-      proxyPlayer.getGameProfile(),
-      forwardingSecret
+        proxyPlayer.getVirtualHost().orElseGet(() ->
+            registeredServer.getServerInfo().getAddress()).getHostString(),
+        getPlayerRemoteAddressAsString(),
+        proxyPlayer,
+        previousServer,
+        registeredServer,
+        server,
+        forwardingSecret
     );
   }
 
