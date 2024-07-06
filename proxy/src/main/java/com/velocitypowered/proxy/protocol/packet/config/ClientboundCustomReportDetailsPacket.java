@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Velocity Contributors
+ * Copyright (C) 2024 Velocity Contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,32 +15,45 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.velocitypowered.proxy.protocol.packet.chat;
+package com.velocitypowered.proxy.protocol.packet.config;
 
 import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.proxy.connection.MinecraftSessionHandler;
 import com.velocitypowered.proxy.protocol.MinecraftPacket;
 import com.velocitypowered.proxy.protocol.ProtocolUtils;
 import io.netty.buffer.ByteBuf;
+import java.util.HashMap;
+import java.util.Map;
 
-public class ChatAcknowledgementPacket implements MinecraftPacket {
-    int offset;
+public class ClientboundCustomReportDetailsPacket implements MinecraftPacket {
 
-    public ChatAcknowledgementPacket(int offset) {
-        this.offset = offset;
+    private Map<String, String> details;
+
+    public ClientboundCustomReportDetailsPacket() {
     }
 
-    public ChatAcknowledgementPacket() {
+    public ClientboundCustomReportDetailsPacket(Map<String, String> details) {
+        this.details = details;
     }
 
     @Override
     public void decode(ByteBuf buf, ProtocolUtils.Direction direction, ProtocolVersion protocolVersion) {
-        offset = ProtocolUtils.readVarInt(buf);
+        int detailsCount = ProtocolUtils.readVarInt(buf);
+
+        this.details = new HashMap<>(detailsCount);
+        for (int i = 0; i < detailsCount; i++) {
+            details.put(ProtocolUtils.readString(buf), ProtocolUtils.readString(buf));
+        }
     }
 
     @Override
     public void encode(ByteBuf buf, ProtocolUtils.Direction direction, ProtocolVersion protocolVersion) {
-        ProtocolUtils.writeVarInt(buf, offset);
+        ProtocolUtils.writeVarInt(buf, details.size());
+
+        details.forEach((key, detail) -> {
+            ProtocolUtils.writeString(buf, key);
+            ProtocolUtils.writeString(buf, detail);
+        });
     }
 
     @Override
@@ -48,14 +61,7 @@ public class ChatAcknowledgementPacket implements MinecraftPacket {
         return handler.handle(this);
     }
 
-    @Override
-    public String toString() {
-        return "ChatAcknowledgement{" +
-                "offset=" + offset +
-                '}';
-    }
-
-    public int offset() {
-        return offset;
+    public Map<String, String> getDetails() {
+        return details;
     }
 }
